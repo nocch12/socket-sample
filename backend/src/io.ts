@@ -16,7 +16,7 @@ export default (server: Server) => {
       'join',
       ({ name, room }: { [key in string]: string }, callback) => {
         const { error, user } = addUser({ id: socket.id, name, room });
-        
+
         if (user === undefined) return callback(error);
 
         // messageイベントを送信
@@ -26,16 +26,19 @@ export default (server: Server) => {
         });
 
         // 部屋全体にメッセージを配信する
-        socket.broadcast
-          .to(user.room)
-          .emit('message', {
-            user: 'admin',
-            text: `${user.name}さんが参加しました`,
-          });
+        socket.broadcast.to(user.room).emit('message', {
+          user: 'admin',
+          text: `${user.name}さんが参加しました`,
+        });
 
         socket.join(user.room);
 
         console.log('ユーザーが参加しました');
+
+        io.to(user.room).emit('roomData', {
+          room: user.room,
+          users: getUserInRoom(user.room),
+        });
       }
     );
 
@@ -44,14 +47,26 @@ export default (server: Server) => {
 
       if (user === undefined) return;
 
-      io.to(user.room).emit('message', {user: user.name, text: message});
+      io.to(user.room).emit('message', { user: user.name, text: message });
+      io.to(user.room).emit('roomData', {
+        room: user.room,
+        users: getUserInRoom(user.room),
+      });
 
       console.log('メッセージが送信されました');
-      
+
       callback();
     });
 
     socket.on('disconnect', (reason) => {
+      const user = removeUser(socket.id);
+
+      if (user) {
+        io.to(user.room).emit('message', {
+          user: 'admin',
+          text: `${user}さんが退出しました`,
+        });
+      }
       console.log('ユーザーの接続が切れました');
     });
   });
